@@ -1,12 +1,6 @@
 /**
  * AuthEdge — Login Screen
- *
- * A premium admin secure portal featuring:
- * - A custom grid keypad for PIN entry (6-digit passcode).
- * - Animated passcode dots with error shake animation.
- * - Biometric login integration (Fingerprint Scan animation).
- * - "Offline Mode" status indicator.
- * - Synced branding theme.
+ * 6-digit PIN entry with eye toggle to reveal entered digits.
  */
 
 import React, {useState, useRef, useEffect} from 'react';
@@ -20,7 +14,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import Svg, {Path} from 'react-native-svg';
+import Svg, {Path, Circle} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
 import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
@@ -38,17 +32,40 @@ const BackspaceIcon: React.FC<{size?: number; color?: string}> = ({
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Path
       d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     />
     <Path
       d="M18 9l-6 6M12 9l6 6"
-      stroke={color}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+const EyeOpenIcon: React.FC<{size?: number; color?: string}> = ({
+  size = 22,
+  color = theme.colors.accentCyan,
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Circle cx="12" cy="12" r="3" stroke={color} strokeWidth="2"/>
+  </Svg>
+);
+
+const EyeOffIcon: React.FC<{size?: number; color?: string}> = ({
+  size = 22,
+  color = theme.colors.textSecondary,
+}) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+    />
+    <Path
+      d="M1 1l22 22"
+      stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     />
   </Svg>
 );
@@ -56,23 +73,22 @@ const BackspaceIcon: React.FC<{size?: number; color?: string}> = ({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
-  const [pin, setPin] = useState('');
+  const [pin, setPin]         = useState('');
+  const [showPin, setShowPin] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
-  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const fadeAnim  = useRef(new Animated.Value(1)).current;
 
   const keypadKeys = [
     ['1', '2', '3'],
     ['4', '5', '6'],
     ['7', '8', '9'],
-    ['', '0', 'back'],
+    ['eye', '0', 'back'],   // 'eye' replaces the empty slot
   ];
 
-  // Detect when PIN is completed (6 digits)
   useEffect(() => {
     if (pin.length === 6) {
-      // Mock validation - in real app, verify against stored PIN
       setErrorMsg('');
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -82,81 +98,90 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
         navigation.replace(ROUTES.DASHBOARD);
       });
     }
-  }, [pin]);
+  }, [pin, fadeAnim, navigation]);
 
   const triggerShake = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 5, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -5, duration: 50, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, {toValue: 10,  duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 10,  duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 5,   duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -5,  duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 0,   duration: 50, useNativeDriver: true}),
     ]).start();
   };
 
   const handleKeyPress = (key: string) => {
-    setErrorMsg('');
     if (key === 'back') {
+      setErrorMsg('');
       setPin(prev => prev.slice(0, -1));
-    } else if (key !== '') {
+    } else if (key === 'eye') {
+      setShowPin(prev => !prev);
+    } else {
+      setErrorMsg('');
       if (pin.length < 6) {
         setPin(prev => prev + key);
       }
     }
   };
 
-  const renderDots = () => {
-    return (
-      <Animated.View style={[styles.dotsContainer, {transform: [{translateX: shakeAnim}]}]}>
-        {Array.from({length: 6}).map((_, index) => {
-          const isActive = index < pin.length;
+  // ─── PIN display ─── dots or actual digits depending on showPin
+  const renderPinDisplay = () => (
+    <Animated.View
+      style={[styles.dotsContainer, {transform: [{translateX: shakeAnim}]}]}>
+      {Array.from({length: 6}).map((_, index) => {
+        const isActive = index < pin.length;
+        if (showPin && isActive) {
+          // Show the actual digit
           return (
-            <View
-              key={index}
-              style={[
-                styles.dot,
-                isActive && styles.dotActive,
-                errorMsg ? styles.dotError : null,
-              ]}
-            />
+            <View key={index} style={[styles.dot, styles.dotReveal]}>
+              <Text style={styles.dotDigit}>{pin[index]}</Text>
+            </View>
           );
-        })}
-      </Animated.View>
-    );
-  };
+        }
+        return (
+          <View
+            key={index}
+            style={[
+              styles.dot,
+              isActive && styles.dotActive,
+              !!errorMsg && styles.dotError,
+            ]}
+          />
+        );
+      })}
+    </Animated.View>
+  );
 
   return (
     <GradientBackground style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
 
       <Animated.View style={[styles.content, {opacity: fadeAnim}]}>
-        {/* Brand/Logo Area */}
+        {/* Branding */}
         <View style={styles.logoContainer}>
           <Image source={AuthEdgeLogo} style={styles.logo} resizeMode="contain" />
           <Text style={styles.appName}>AuthEdge</Text>
           <Text style={styles.subtitle}>SECURE PORTAL</Text>
         </View>
 
-        {/* PIN Entry feedback */}
+        {/* PIN feedback */}
         <View style={styles.entryFeedbackContainer}>
           {errorMsg ? (
             <Text style={styles.errorText}>{errorMsg}</Text>
           ) : (
             <Text style={styles.promptText}>Enter your 6-digit PIN</Text>
           )}
-          {renderDots()}
+          {renderPinDisplay()}
         </View>
 
-        {/* Custom Keypad Grid */}
+        {/* Keypad */}
         <View style={styles.keypadContainer}>
           {keypadKeys.map((row, rowIndex) => (
             <View key={`row-${rowIndex}`} style={styles.keypadRow}>
               {row.map((key, keyIdx) => {
-                if (key === '') {
-                  return <View key={`empty-${rowIndex}-${keyIdx}`} style={[styles.keypadButton, {backgroundColor: 'transparent', borderColor: 'transparent'}]} />;
-                }
+                const isSpecial = key === 'back' || key === 'eye';
                 return (
                   <TouchableOpacity
                     key={`key-${rowIndex}-${keyIdx}`}
@@ -164,11 +189,15 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
                     onPress={() => handleKeyPress(key)}
                     style={[
                       styles.keypadButton,
-                      key === 'back' ? styles.keypadButtonSpecial : null,
-                    ]}
-                  >
+                      isSpecial && styles.keypadButtonSpecial,
+                      key === 'eye' && showPin && styles.keypadButtonEyeActive,
+                    ]}>
                     {key === 'back' ? (
                       <BackspaceIcon />
+                    ) : key === 'eye' ? (
+                      showPin
+                        ? <EyeOpenIcon />
+                        : <EyeOffIcon />
                     ) : (
                       <Text style={styles.keypadButtonText}>{key}</Text>
                     )}
@@ -179,7 +208,7 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
           ))}
         </View>
 
-        {/* Offline Badge */}
+        {/* Footer */}
         <View style={styles.footer}>
           <StatusBadge status="offline" />
         </View>
@@ -189,24 +218,15 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: {flex: 1},
   content: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 50,
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  logo: {
-    width: 100,
-    height: 100,
-    marginBottom: theme.spacing.sm,
-  },
+  logoContainer: {alignItems: 'center', marginTop: 20},
+  logo: {width: 100, height: 100, marginBottom: theme.spacing.sm},
   appName: {
     fontSize: theme.typography.sizes.h3,
     fontWeight: theme.typography.weights.bold as any,
@@ -222,7 +242,7 @@ const styles = StyleSheet.create({
   },
   entryFeedbackContainer: {
     alignItems: 'center',
-    height: 90,
+    minHeight: 90,
     justifyContent: 'center',
   },
   promptText: {
@@ -238,23 +258,26 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
     letterSpacing: 0.5,
   },
+  // PIN dots row
   dotsContainer: {
     flexDirection: 'row',
-    gap: 16,
-    height: 20,
+    gap: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: theme.colors.surfaceBorder,
     borderWidth: 1.5,
     borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dotActive: {
     backgroundColor: theme.colors.accentCyan,
-    borderColor: 'rgba(0, 229, 160, 0.3)',
+    borderColor: 'rgba(0,229,160,0.3)',
     shadowColor: theme.colors.accentCyan,
     shadowOffset: {width: 0, height: 0},
     shadowOpacity: 0.8,
@@ -262,11 +285,24 @@ const styles = StyleSheet.create({
   },
   dotError: {
     backgroundColor: theme.colors.error,
-    borderColor: 'rgba(255, 82, 82, 0.3)',
+    borderColor: 'rgba(255,82,82,0.3)',
   },
+  dotReveal: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,229,160,0.15)',
+    borderColor: theme.colors.accentCyan,
+    borderWidth: 1,
+  },
+  dotDigit: {
+    fontSize: 12,
+    fontWeight: theme.typography.weights.bold as any,
+    color: theme.colors.accentCyan,
+  },
+  // Keypad
   keypadContainer: {
     width: width * 0.85,
-    maxHeight: 380,
     justifyContent: 'center',
   },
   keypadRow: {
@@ -290,18 +326,20 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   keypadButtonSpecial: {
-    backgroundColor: 'rgba(6, 11, 24, 0.4)',
+    backgroundColor: 'rgba(6,11,24,0.4)',
     borderColor: 'transparent',
+  },
+  keypadButtonEyeActive: {
+    backgroundColor: 'rgba(0,229,160,0.1)',
+    borderColor: theme.colors.accentCyan,
+    borderWidth: 1,
   },
   keypadButtonText: {
     fontSize: theme.typography.sizes.h3,
     fontWeight: theme.typography.weights.semibold as any,
     color: theme.colors.textPrimary,
   },
-  footer: {
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
+  footer: {alignItems: 'center', gap: theme.spacing.sm},
 });
 
 export default LoginScreen;
