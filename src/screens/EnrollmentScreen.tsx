@@ -20,6 +20,8 @@ import {
   TextInput,
   ScrollView,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Svg, {Path} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
@@ -347,10 +349,15 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
   );
 
   const renderConfirmation = () => (
-    <ScrollView
+    <KeyboardAvoidingView
       style={styles.scrollFlex}
-      contentContainerStyle={styles.confirmationContent}
-      showsVerticalScrollIndicator={false}>
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+      <ScrollView
+        style={styles.scrollFlex}
+        contentContainerStyle={styles.confirmationContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
       <View style={styles.confirmationIconContainer}>
         <CheckCircleIcon size={80} />
       </View>
@@ -369,6 +376,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
           value={name}
           onChangeText={setName}
           autoCapitalize="words"
+          returnKeyType="next"
         />
       </Card>
 
@@ -380,6 +388,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
           placeholderTextColor={theme.colors.textSecondary}
           keyboardType="email-address"
           autoCapitalize="none"
+          returnKeyType="next"
         />
       </Card>
 
@@ -389,6 +398,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
           style={styles.input}
           placeholder="e.g. NHAI-2024-0012"
           placeholderTextColor={theme.colors.textSecondary}
+          returnKeyType="done"
         />
       </Card>
 
@@ -416,7 +426,8 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
         disabled={name.trim().length < 2}
         style={styles.fullWidthButton}
       />
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderSetPin = () => {

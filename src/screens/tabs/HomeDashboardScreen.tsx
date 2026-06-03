@@ -3,7 +3,7 @@
  * Industry-ready attendance analytics dashboard for current month.
  */
 
-import React, {useState} from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -13,16 +13,9 @@ import {
   Image,
   Dimensions,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
-import Svg, {
-  Path,
-  Circle,
-  Rect,
-  G,
-  Defs,
-  LinearGradient,
-  Stop,
-} from 'react-native-svg';
+import Svg, {Path, Circle} from 'react-native-svg';
 import {theme} from '../../theme';
 import {GradientBackground, Card, StatusBadge} from '../../components/common';
 
@@ -38,11 +31,20 @@ const MONTH_NAMES = [
 const currentMonth = MONTH_NAMES[today.getMonth()];
 const currentYear = today.getFullYear();
 
-// Mock: days present this month so far
-const PRESENT_DAYS = 18;
-const ABSENT_DAYS = 3;
-const WORKING_DAYS = today.getDate(); // days elapsed
-const PENDING_TODAY = false; // set true to show pending banner
+// Total working days in month so far (excluding weekends)
+function countWorkingDays(year: number, month: number, upToDay: number): number {
+  let count = 0;
+  for (let d = 1; d <= upToDay; d++) {
+    const dow = new Date(year, month, d).getDay();
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count;
+}
+
+const WORKING_DAYS = countWorkingDays(today.getFullYear(), today.getMonth(), today.getDate());
+const PRESENT_DAYS = Math.min(18, WORKING_DAYS); // can't exceed working days
+const ABSENT_DAYS  = Math.max(0, Math.min(3, WORKING_DAYS - PRESENT_DAYS));
+const PENDING_TODAY = false;
 
 // Bar chart data — last 7 days check-in hours (mock)
 const WEEKLY_DATA = [
@@ -57,10 +59,9 @@ const WEEKLY_DATA = [
 const MAX_HOURS = 10;
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
-const BellIcon = () => (
-  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-    <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke={theme.colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <Path d="M13.73 21a2 2 0 01-3.46 0" stroke={theme.colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+const LogoutIcon = ({size = 20, color = theme.colors.error}: {size?: number; color?: string}) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
   </Svg>
 );
 
@@ -85,13 +86,6 @@ const TrendUpIcon = () => (
   </Svg>
 );
 
-const UserIcon = () => (
-  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-    <Path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke={theme.colors.textSecondary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <Circle cx="12" cy="7" r="4" stroke={theme.colors.textSecondary} strokeWidth="2"/>
-  </Svg>
-);
-
 // ─── Donut Chart ──────────────────────────────────────────────────────────────
 const DonutChart: React.FC<{present: number; absent: number; total: number}> = ({
   present, absent, total,
@@ -100,42 +94,37 @@ const DonutChart: React.FC<{present: number; absent: number; total: number}> = (
   const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const presentPct = total > 0 ? present / total : 0;
-  const absentPct = total > 0 ? absent / total : 0;
-  const presentDash = presentPct * circumference;
-  const absentDash = absentPct * circumference;
-  const presentOffset = 0;
-  const absentOffset = -(presentDash);
+  const safePresentPct = total > 0 ? Math.min(present / total, 1) : 0;
+  const safeAbsentPct  = total > 0 ? Math.min(absent  / total, 1 - safePresentPct) : 0;
+  const presentDash = safePresentPct * circumference;
+  const absentDash  = safeAbsentPct  * circumference;
+  // Start from top (offset by circumference/4)
+  const startOffset = circumference / 4;
 
   return (
     <Svg width={size} height={size}>
       {/* Track */}
-      <Circle
-        cx={size / 2} cy={size / 2} r={radius}
-        stroke={theme.colors.surfaceBorder}
-        strokeWidth={strokeWidth}
-        fill="none"
-      />
+      <Circle cx={size/2} cy={size/2} r={radius} stroke={theme.colors.surfaceBorder} strokeWidth={strokeWidth} fill="none"/>
       {/* Present arc */}
-      <Circle
-        cx={size / 2} cy={size / 2} r={radius}
-        stroke={theme.colors.accentCyan}
-        strokeWidth={strokeWidth}
-        fill="none"
-        strokeDasharray={`${presentDash} ${circumference - presentDash}`}
-        strokeDashoffset={circumference / 4}
-        strokeLinecap="round"
-      />
+      {presentDash > 0 && (
+        <Circle
+          cx={size/2} cy={size/2} r={radius}
+          stroke={theme.colors.accentCyan} strokeWidth={strokeWidth} fill="none"
+          strokeDasharray={`${presentDash} ${circumference - presentDash}`}
+          strokeDashoffset={startOffset}
+          strokeLinecap="round"
+        />
+      )}
       {/* Absent arc */}
-      <Circle
-        cx={size / 2} cy={size / 2} r={radius}
-        stroke={theme.colors.error}
-        strokeWidth={strokeWidth}
-        fill="none"
-        strokeDasharray={`${absentDash} ${circumference - absentDash}`}
-        strokeDashoffset={circumference / 4 - presentDash}
-        strokeLinecap="round"
-      />
+      {absentDash > 0 && (
+        <Circle
+          cx={size/2} cy={size/2} r={radius}
+          stroke={theme.colors.error} strokeWidth={strokeWidth} fill="none"
+          strokeDasharray={`${absentDash} ${circumference - absentDash}`}
+          strokeDashoffset={startOffset - presentDash}
+          strokeLinecap="round"
+        />
+      )}
     </Svg>
   );
 };
@@ -149,7 +138,6 @@ const WeeklyBarChart: React.FC = () => {
     <View style={barStyles.container}>
       {WEEKLY_DATA.map((d, i) => {
         const barH = d.present ? Math.max(6, (d.hours / MAX_HOURS) * chartH) : 6;
-        const isToday = i === today.getDay() === 0 ? 6 : today.getDay() - 1;
         return (
           <View key={i} style={barStyles.barCol}>
             <View style={[barStyles.barTrack, {height: chartH}]}>
@@ -202,9 +190,17 @@ const barStyles = StyleSheet.create({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const HomeDashboardScreen: React.FC = () => {
+  // Attendance % capped at 100 — present / working days elapsed
   const attendancePct = WORKING_DAYS > 0
-    ? Math.round((PRESENT_DAYS / WORKING_DAYS) * 100)
+    ? Math.min(100, Math.round((PRESENT_DAYS / WORKING_DAYS) * 100))
     : 0;
+
+  const handleLogout = () => {
+    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+      {text: 'Cancel', style: 'cancel'},
+      {text: 'Sign Out', style: 'destructive', onPress: () => {}},
+    ]);
+  };
 
   return (
     <GradientBackground style={styles.container}>
@@ -221,9 +217,8 @@ const HomeDashboardScreen: React.FC = () => {
         </View>
         <View style={styles.headerRight}>
           <StatusBadge status="offline" />
-          <TouchableOpacity style={styles.notifBtn} activeOpacity={0.7}>
-            <BellIcon />
-            <View style={styles.notifDot} />
+          <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={handleLogout}>
+            <LogoutIcon size={18} />
           </TouchableOpacity>
         </View>
       </View>
@@ -235,10 +230,7 @@ const HomeDashboardScreen: React.FC = () => {
 
         {/* Attendance Status Banner */}
         <Card
-          style={[
-            styles.statusBanner,
-            {borderColor: PENDING_TODAY ? theme.colors.warning : theme.colors.accentCyan},
-          ]}>
+          style={[styles.statusBanner, {borderColor: PENDING_TODAY ? theme.colors.warning : theme.colors.accentCyan}] as any}>
           <View style={styles.statusBannerLeft}>
             {PENDING_TODAY ? <ClockIcon /> : <CheckCircleFillIcon />}
             <View style={styles.statusBannerText}>
@@ -406,17 +398,11 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
   },
   headerRight: {flexDirection: 'row', alignItems: 'center', gap: 10},
-  notifBtn: {
+  logoutBtn: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: theme.colors.surfaceDark,
-    borderWidth: 1, borderColor: theme.colors.surfaceBorder,
+    backgroundColor: 'rgba(255,82,82,0.1)',
+    borderWidth: 1, borderColor: theme.colors.error,
     alignItems: 'center', justifyContent: 'center',
-  },
-  notifDot: {
-    position: 'absolute', top: 7, right: 7,
-    width: 7, height: 7, borderRadius: 3.5,
-    backgroundColor: theme.colors.error,
-    borderWidth: 1, borderColor: theme.colors.surfaceDark,
   },
   scroll: {flex: 1},
   scrollContent: {paddingHorizontal: theme.spacing.lg, paddingBottom: 30},
