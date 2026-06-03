@@ -470,14 +470,14 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
         {/* Keypad */}
         <View style={styles.pinKeypad}>
           {keypadKeys.map((row, rowIdx) => (
-            <View key={rowIdx} style={styles.pinKeypadRow}>
+            <View key={`row-${rowIdx}`} style={styles.pinKeypadRow}>
               {row.map((key, keyIdx) => {
                 if (key === '') {
-                  return <View key={keyIdx} style={styles.pinKeyEmpty} />;
+                  return <View key={`empty-${rowIdx}-${keyIdx}`} style={styles.pinKeyEmpty} />;
                 }
                 return (
                   <TouchableOpacity
-                    key={keyIdx}
+                    key={`key-${rowIdx}-${keyIdx}`}
                     activeOpacity={0.6}
                     onPress={() => handlePinKey(key)}
                     style={[

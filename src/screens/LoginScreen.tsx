@@ -152,14 +152,14 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
         {/* Custom Keypad Grid */}
         <View style={styles.keypadContainer}>
           {keypadKeys.map((row, rowIndex) => (
-            <View key={rowIndex} style={styles.keypadRow}>
+            <View key={`row-${rowIndex}`} style={styles.keypadRow}>
               {row.map((key, keyIdx) => {
                 if (key === '') {
-                  return <View key={keyIdx} style={[styles.keypadButton, {backgroundColor: 'transparent', borderColor: 'transparent'}]} />;
+                  return <View key={`empty-${rowIndex}-${keyIdx}`} style={[styles.keypadButton, {backgroundColor: 'transparent', borderColor: 'transparent'}]} />;
                 }
                 return (
                   <TouchableOpacity
-                    key={key}
+                    key={`key-${rowIndex}-${keyIdx}`}
                     activeOpacity={0.6}
                     onPress={() => handleKeyPress(key)}
                     style={[
