@@ -9,6 +9,7 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import EnrollmentScreen from '../screens/EnrollmentScreen';
 import VerificationScreen from '../screens/VerificationScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import SyncStatusScreen from '../screens/SyncStatusScreen';
 import MainTabNavigator from './MainTabNavigator';
 
@@ -32,7 +33,7 @@ const AppNavigator: React.FC = () => {
       <Stack.Screen name="Dashboard" component={MainTabNavigator} options={{animation: 'fade'}} />
       <Stack.Screen name="Enrollment" component={EnrollmentScreen} options={{animation: 'slide_from_right'}} />
       <Stack.Screen name="Verification" component={VerificationScreen} options={{animation: 'slide_from_right'}} />
-      <Stack.Screen name="Settings" component={MainTabNavigator} options={{animation: 'slide_from_right'}} />
+      <Stack.Screen name="Settings" component={SettingsScreen} options={{animation: 'slide_from_right'}} />
       <Stack.Screen name="SyncStatus" component={SyncStatusScreen} options={{animation: 'slide_from_right'}} />
     </Stack.Navigator>
   );

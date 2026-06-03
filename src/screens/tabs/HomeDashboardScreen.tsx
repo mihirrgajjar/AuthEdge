@@ -16,11 +16,13 @@ import {
   Alert,
 } from 'react-native';
 import Svg, {Path, Circle} from 'react-native-svg';
-import {useNavigation} from '@react-navigation/native';
+import {useNavigation, useFocusEffect} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import type {RootStackParamList} from '../../navigation/types';
 import {theme} from '../../theme';
 import {GradientBackground, Card, StatusBadge} from '../../components/common';
+import {useApp} from '../../context/AppContext';
+import {formatDisplayDate, formatDisplayTime, getGreeting} from '../../utils';
 
 const AuthEdgeLogo = require('../../assets/images/AuthEdge_logo.png');
 const {width} = Dimensions.get('window');
@@ -194,11 +196,27 @@ const barStyles = StyleSheet.create({
 // ─── Main Component ───────────────────────────────────────────────────────────
 const HomeDashboardScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const {
+    currentUser,
+    isTodayMarked,
+    todayRecord,
+    monthlyStats,
+    recentRecords,
+    logout,
+    refreshAttendance
+  } = useApp();
 
-  // Attendance % capped at 100 — present / working days elapsed
-  const attendancePct = WORKING_DAYS > 0
-    ? Math.min(100, Math.round((PRESENT_DAYS / WORKING_DAYS) * 100))
-    : 0;
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshAttendance();
+    }, [])
+  );
+
+  const presentDays = monthlyStats.presentCount + monthlyStats.lateCount;
+  const absentDays = monthlyStats.absentCount;
+  const totalDays = monthlyStats.totalDays;
+  const attendancePct = monthlyStats.percentage;
+  const pendingDays = Math.max(0, totalDays - presentDays - absentDays);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -206,7 +224,10 @@ const HomeDashboardScreen: React.FC = () => {
       {
         text: 'Sign Out',
         style: 'destructive',
-        onPress: () => navigation.replace('Home'),
+        onPress: async () => {
+          await logout();
+          navigation.replace('Home');
+        },
       },
     ]);
   };
@@ -220,8 +241,8 @@ const HomeDashboardScreen: React.FC = () => {
         <View style={styles.headerLeft}>
           <Image source={AuthEdgeLogo} style={styles.headerLogo} resizeMode="contain" />
           <View>
-            <Text style={styles.headerGreeting}>Good {today.getHours() < 12 ? 'Morning' : today.getHours() < 17 ? 'Afternoon' : 'Evening'} 👋</Text>
-            <Text style={styles.headerName}>Rajesh Kumar</Text>
+            <Text style={styles.headerGreeting}>{getGreeting()} 👋</Text>
+            <Text style={styles.headerName}>{currentUser?.full_name || 'AuthEdge User'}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
@@ -239,24 +260,24 @@ const HomeDashboardScreen: React.FC = () => {
 
         {/* Attendance Status Banner */}
         <Card
-          style={[styles.statusBanner, {borderColor: PENDING_TODAY ? theme.colors.warning : theme.colors.accentCyan}] as any}>
+          style={[styles.statusBanner, {borderColor: !isTodayMarked ? theme.colors.warning : theme.colors.accentCyan}] as any}>
           <View style={styles.statusBannerLeft}>
-            {PENDING_TODAY ? <ClockIcon /> : <CheckCircleFillIcon />}
+            {!isTodayMarked ? <ClockIcon /> : <CheckCircleFillIcon />}
             <View style={styles.statusBannerText}>
               <Text style={styles.statusBannerTitle}>
-                {PENDING_TODAY ? 'Attendance Pending' : 'You Are Present Today ✓'}
+                {!isTodayMarked ? 'Attendance Pending' : 'You Are Present Today ✓'}
               </Text>
               <Text style={styles.statusBannerSub}>
-                {PENDING_TODAY
+                {!isTodayMarked
                   ? 'Your attendance is still pending for today'
-                  : `Marked at 09:12 AM · ${today.toLocaleDateString('en-IN', {day: 'numeric', month: 'short', year: 'numeric'})}`}
+                  : `Marked at ${formatDisplayTime(todayRecord?.check_in_time || '')} · ${formatDisplayDate(todayRecord?.date || '')}`}
               </Text>
             </View>
           </View>
           <View
             style={[
               styles.statusDot,
-              {backgroundColor: PENDING_TODAY ? theme.colors.warning : theme.colors.accentCyan},
+              {backgroundColor: !isTodayMarked ? theme.colors.warning : theme.colors.accentCyan},
             ]}
           />
         </Card>
@@ -267,7 +288,7 @@ const HomeDashboardScreen: React.FC = () => {
           {/* Donut */}
           <Card style={styles.donutCard}>
             <View style={styles.donutWrap}>
-              <DonutChart present={PRESENT_DAYS} absent={ABSENT_DAYS} total={WORKING_DAYS} />
+              <DonutChart present={presentDays} absent={absentDays} total={totalDays} />
               <View style={styles.donutCenter}>
                 <Text style={styles.donutPct}>{attendancePct}%</Text>
                 <Text style={styles.donutLabel}>Rate</Text>
@@ -277,17 +298,17 @@ const HomeDashboardScreen: React.FC = () => {
               <View style={styles.legendRow}>
                 <View style={[styles.legendDot, {backgroundColor: theme.colors.accentCyan}]} />
                 <Text style={styles.legendText}>Present</Text>
-                <Text style={styles.legendVal}>{PRESENT_DAYS}</Text>
+                <Text style={styles.legendVal}>{presentDays}</Text>
               </View>
               <View style={styles.legendRow}>
                 <View style={[styles.legendDot, {backgroundColor: theme.colors.error}]} />
                 <Text style={styles.legendText}>Absent</Text>
-                <Text style={styles.legendVal}>{ABSENT_DAYS}</Text>
+                <Text style={styles.legendVal}>{absentDays}</Text>
               </View>
               <View style={styles.legendRow}>
                 <View style={[styles.legendDot, {backgroundColor: theme.colors.warning}]} />
                 <Text style={styles.legendText}>Pending</Text>
-                <Text style={styles.legendVal}>{WORKING_DAYS - PRESENT_DAYS - ABSENT_DAYS}</Text>
+                <Text style={styles.legendVal}>{pendingDays}</Text>
               </View>
             </View>
           </Card>
@@ -295,10 +316,10 @@ const HomeDashboardScreen: React.FC = () => {
           {/* Stats column */}
           <View style={styles.statsCol}>
             {[
-              {label: 'Working Days', value: String(WORKING_DAYS), color: theme.colors.primaryCyan},
-              {label: 'Present', value: String(PRESENT_DAYS), color: theme.colors.accentCyan},
-              {label: 'Absent', value: String(ABSENT_DAYS), color: theme.colors.error},
-              {label: 'On Leave', value: '1', color: theme.colors.warning},
+              {label: 'Working Days', value: String(totalDays), color: theme.colors.primaryCyan},
+              {label: 'Present', value: String(monthlyStats.presentCount), color: theme.colors.accentCyan},
+              {label: 'Late', value: String(monthlyStats.lateCount), color: theme.colors.warning},
+              {label: 'Absent', value: String(absentDays), color: theme.colors.error},
             ].map((s, i) => (
               <Card key={i} style={styles.miniStatCard}>
                 <Text style={[styles.miniStatVal, {color: s.color}]}>{s.value}</Text>
@@ -321,7 +342,7 @@ const HomeDashboardScreen: React.FC = () => {
             <View style={[styles.progressFill, {width: `${attendancePct}%`}]} />
           </View>
           <Text style={styles.progressFooter}>
-            {PRESENT_DAYS} of {WORKING_DAYS} working days attended
+            {presentDays} of {totalDays} working days attended
           </Text>
         </Card>
 
@@ -338,20 +359,37 @@ const HomeDashboardScreen: React.FC = () => {
         {/* Recent activity */}
         <Text style={styles.sectionTitle}>Recent Activity</Text>
         <Card style={styles.activityCard}>
-          {[
-            {action: 'Attendance Marked', time: 'Today, 09:12 AM', color: theme.colors.accentCyan},
-            {action: 'Attendance Marked', time: 'Yesterday, 09:05 AM', color: theme.colors.accentCyan},
-            {action: 'Absent', time: '2 days ago', color: theme.colors.error},
-            {action: 'Attendance Marked', time: '3 days ago, 08:58 AM', color: theme.colors.accentCyan},
-          ].map((item, i) => (
-            <View key={i} style={[styles.activityRow, i > 0 && styles.activityBorder]}>
-              <View style={[styles.activityDot, {backgroundColor: item.color}]} />
-              <View style={styles.activityInfo}>
-                <Text style={styles.activityAction}>{item.action}</Text>
-                <Text style={styles.activityTime}>{item.time}</Text>
-              </View>
+          {recentRecords.length === 0 ? (
+            <View style={{paddingVertical: 20, alignItems: 'center'}}>
+              <Text style={{color: theme.colors.textSecondary, fontSize: 13}}>No recent attendance records</Text>
             </View>
-          ))}
+          ) : (
+            recentRecords.slice(0, 5).map((item, i) => {
+              const statusLabel = item.status === 'present'
+                ? 'Present'
+                : item.status === 'late'
+                ? 'Late Check-in'
+                : 'Absent';
+              const dotColor = item.status === 'present'
+                ? theme.colors.accentCyan
+                : item.status === 'late'
+                ? theme.colors.warning
+                : theme.colors.error;
+              const displayTime = item.check_in_time
+                ? `, ${formatDisplayTime(item.check_in_time)}`
+                : '';
+
+              return (
+                <View key={item.id || i} style={[styles.activityRow, i > 0 && styles.activityBorder]}>
+                  <View style={[styles.activityDot, {backgroundColor: dotColor}]} />
+                  <View style={styles.activityInfo}>
+                    <Text style={styles.activityAction}>{statusLabel}</Text>
+                    <Text style={styles.activityTime}>{formatDisplayDate(item.date)}{displayTime}</Text>
+                  </View>
+                </View>
+              );
+            })
+          )}
         </Card>
 
         {/* Compliance card */}

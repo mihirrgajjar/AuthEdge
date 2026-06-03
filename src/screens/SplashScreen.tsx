@@ -17,15 +17,20 @@ import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
 import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
+import {useApp} from '../context/AppContext';
 
 const AuthEdgeLogo = require('../assets/images/AuthEdge_logo.png');
 const {width, height} = Dimensions.get('window');
 
 const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
+  const {isLoggedIn, isRegistered, isLoading} = useApp();
   const fadeAnim     = useRef(new Animated.Value(0)).current;
   const scaleAnim    = useRef(new Animated.Value(0.88)).current;
   const taglineFade  = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+
+  // Track dependencies so navigation can execute when loading completes and timer fires
+  const navTriggerRef = useRef(false);
 
   useEffect(() => {
     // Logo fade + scale in
@@ -61,11 +66,33 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
 
     // Navigate after 2.6s
     const timer = setTimeout(() => {
-      navigation.replace(ROUTES.HOME);
+      navTriggerRef.current = true;
+      checkAndNavigate();
     }, 2600);
 
     return () => clearTimeout(timer);
-  }, [navigation, fadeAnim, scaleAnim, taglineFade, progressAnim]);
+  }, [fadeAnim, scaleAnim, taglineFade, progressAnim]);
+
+  // Navigate when loading finishes if the timer has fired
+  useEffect(() => {
+    if (!isLoading && navTriggerRef.current) {
+      checkAndNavigate();
+    }
+  }, [isLoading, isLoggedIn, isRegistered]);
+
+  const checkAndNavigate = () => {
+    if (isLoading) return; // Wait for database to load
+    
+    if (isRegistered) {
+      if (isLoggedIn) {
+        navigation.replace(ROUTES.DASHBOARD);
+      } else {
+        navigation.replace(ROUTES.LOGIN);
+      }
+    } else {
+      navigation.replace(ROUTES.HOME);
+    }
+  };
 
   const progressWidth = progressAnim.interpolate({
     inputRange:  [0, 1],

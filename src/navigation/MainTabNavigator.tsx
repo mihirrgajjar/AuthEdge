@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import Svg, {Path, Circle} from 'react-native-svg';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
+import {useNavigation} from '@react-navigation/native';
 import {theme} from '../theme';
 
 import HomeDashboardScreen from '../screens/tabs/HomeDashboardScreen';
@@ -111,7 +112,7 @@ const TAB_ITEMS = [
   {key: 'Attendance', label: 'Attendance', Icon: AttendanceIcon},
   {key: 'History',    label: 'History',    Icon: HistoryIcon},
   {key: 'Profile',    label: 'Profile',    Icon: ProfileIcon},
-  {key: 'Settings',   label: 'Settings',   Icon: SettingsIcon},
+  {key: 'SettingsTab',label: 'Settings',   Icon: SettingsIcon},
 ];
 
 function CustomTabBar({state, navigation}: any) {
@@ -185,12 +186,23 @@ const tabStyles = StyleSheet.create({
   },
 });
 
+// ─── Settings Tab Wrapper ─────────────────────────────────────────────────────
+// When Settings is rendered inside the tab, the goBack should navigate to Dashboard tab
+const SettingsTabScreen = () => {
+  const navigation = useNavigation<any>();
+  return (
+    <SettingsScreen
+      navigation={{
+        ...navigation,
+        goBack: () => navigation.navigate('Dashboard'),
+      }}
+      route={{} as any}
+    />
+  );
+};
+
 // ─── Navigator ────────────────────────────────────────────────────────────────
 const Tab = createBottomTabNavigator();
-
-const SettingsTabScreen = () => (
-  <SettingsScreen navigation={{goBack: () => {}}} route={{} as any} />
-);
 
 const MainTabNavigator: React.FC = () => {
   return (
@@ -201,7 +213,7 @@ const MainTabNavigator: React.FC = () => {
       <Tab.Screen name="Attendance" component={AttendanceScreen} />
       <Tab.Screen name="History"    component={HistoryScreen} />
       <Tab.Screen name="Profile"    component={ProfileScreen} />
-      <Tab.Screen name="Settings"   component={SettingsTabScreen} />
+      <Tab.Screen name="SettingsTab" component={SettingsTabScreen} />
     </Tab.Navigator>
   );
 };

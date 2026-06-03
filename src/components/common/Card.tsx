@@ -6,13 +6,13 @@
  */
 
 import React from 'react';
-import {StyleSheet, View, ViewStyle} from 'react-native';
+import {StyleSheet, View, ViewStyle, StyleProp} from 'react-native';
 import {theme} from '../../theme';
 
 interface CardProps {
   children: React.ReactNode;
   glow?: 'none' | 'cyan' | 'blue';
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }
 
 export const Card: React.FC<CardProps> = ({

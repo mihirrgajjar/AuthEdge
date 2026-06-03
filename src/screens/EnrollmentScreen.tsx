@@ -29,6 +29,7 @@ import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
 import {GradientBackground, Button, Card} from '../components/common';
 import {FaceGuideOverlay, QualityIndicator, CaptureButton} from '../components/enrollment';
+import {useApp} from '../context/AppContext';
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -115,9 +116,12 @@ type WizardStep = 'instructions' | 'capture' | 'quality' | 'confirmation' | 'set
 const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
   navigation,
 }) => {
+  const {register} = useApp();
   const [step, setStep] = useState<WizardStep>('instructions');
   const [captureIndex, setCaptureIndex] = useState(0);
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
@@ -195,8 +199,23 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
         } else {
           // Validate both PINs match
           if (newPin === pin) {
-            // Success — navigate to Dashboard
-            setTimeout(() => navigation.replace(ROUTES.DASHBOARD), 400);
+            // Success — register in SQLite and navigate to Dashboard
+            const registerUser = async () => {
+              const success = await register(name, email, employeeId, pin);
+              if (success) {
+                setTimeout(() => navigation.replace(ROUTES.DASHBOARD), 400);
+              } else {
+                setPinError("Registration failed. ID may be in use.");
+                triggerShake();
+                setTimeout(() => {
+                  setPin('');
+                  setConfirmPin('');
+                  setPinStep('enter');
+                  setPinError('');
+                }, 1500);
+              }
+            };
+            registerUser();
           } else {
             setPinError("PINs don't match. Try again.");
             triggerShake();
@@ -386,6 +405,8 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
           style={styles.input}
           placeholder="e.g. rajesh@example.com"
           placeholderTextColor={theme.colors.textSecondary}
+          value={email}
+          onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
           returnKeyType="next"
@@ -398,6 +419,9 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
           style={styles.input}
           placeholder="e.g. NHAI-2024-0012"
           placeholderTextColor={theme.colors.textSecondary}
+          value={employeeId}
+          onChangeText={setEmployeeId}
+          autoCapitalize="characters"
           returnKeyType="done"
         />
       </Card>

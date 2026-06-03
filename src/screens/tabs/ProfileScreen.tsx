@@ -1,9 +1,10 @@
 /**
  * AuthEdge — Profile Tab
  * Industry-standard employee profile screen.
+ * Wired to AppContext for real user data, stats, and actions.
  */
 
-import React, {useState} from 'react';
+import React, {useState, useCallback} from 'react';
 import {
   View,
   Text,
@@ -12,10 +13,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Switch,
+  Alert,
+  TextInput,
+  Modal,
 } from 'react-native';
 import Svg, {Path, Circle} from 'react-native-svg';
 import {theme} from '../../theme';
-import {GradientBackground, Card} from '../../components/common';
+import {GradientBackground, Card, Button} from '../../components/common';
+import {useApp} from '../../context/AppContext';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const UserCircleIcon = ({size = 64, color = theme.colors.accentCyan}: {size?: number; color?: string}) => (
@@ -60,15 +65,119 @@ const BellIcon = ({size = 16, color = theme.colors.textSecondary}: {size?: numbe
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const ProfileScreen: React.FC = () => {
+  const {
+    currentUser,
+    monthlyStats,
+    logout,
+    updateProfile,
+    changePin,
+    settings,
+    updateSetting,
+  } = useApp();
+
   const [biometric, setBiometric] = useState(true);
   const [notifications, setNotifications] = useState(true);
+
+  // Change PIN modal state
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [oldPin, setOldPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+
+  // Edit profile modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState(currentUser?.full_name || '');
+  const [editEmail, setEditEmail] = useState(currentUser?.email || '');
+  const [editLoading, setEditLoading] = useState(false);
+
+  const handleLogout = useCallback(() => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {text: 'Cancel', style: 'cancel'},
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await logout();
+          },
+        },
+      ]
+    );
+  }, [logout]);
+
+  const handleChangePin = useCallback(async () => {
+    if (oldPin.length !== 6 || newPin.length !== 6) {
+      Alert.alert('Error', 'PIN must be exactly 6 digits.');
+      return;
+    }
+    setPinLoading(true);
+    try {
+      const success = await changePin(oldPin, newPin);
+      if (success) {
+        Alert.alert('Success', 'Your PIN has been changed successfully.');
+        setShowPinModal(false);
+        setOldPin('');
+        setNewPin('');
+      } else {
+        Alert.alert('Error', 'Current PIN is incorrect. Please try again.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Failed to change PIN.');
+    } finally {
+      setPinLoading(false);
+    }
+  }, [oldPin, newPin, changePin]);
+
+  const handleEditProfile = useCallback(async () => {
+    if (!editName.trim()) {
+      Alert.alert('Error', 'Name cannot be empty.');
+      return;
+    }
+    setEditLoading(true);
+    try {
+      const success = await updateProfile({
+        fullName: editName.trim(),
+        email: editEmail.trim() || undefined,
+      });
+      if (success) {
+        Alert.alert('Success', 'Profile updated successfully.');
+        setShowEditModal(false);
+      } else {
+        Alert.alert('Error', 'Failed to update profile.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'Something went wrong.');
+    } finally {
+      setEditLoading(false);
+    }
+  }, [editName, editEmail, updateProfile]);
+
+  // Derive display values from DB
+  const userName = currentUser?.full_name || 'User';
+  const userEmail = currentUser?.email || 'Not set';
+  const employeeId = currentUser?.employee_id || 'N/A';
+  const faceEnrolled = (currentUser?.face_enrolled ?? 0) > 0;
+  const faceAngles = currentUser?.face_angles_count ?? 0;
+  const joinedDate = currentUser?.created_at
+    ? new Date(currentUser.created_at).toLocaleDateString('en-IN', {month: 'short', year: 'numeric'})
+    : 'N/A';
 
   const menuItems = [
     {
       section: 'Account',
       items: [
-        {label: 'Edit Profile', icon: <EditIcon />, arrow: true},
-        {label: 'Change PIN', icon: <ShieldIcon />, arrow: true},
+        {label: 'Edit Profile', icon: <EditIcon />, arrow: true, onPress: () => {
+          setEditName(currentUser?.full_name || '');
+          setEditEmail(currentUser?.email || '');
+          setShowEditModal(true);
+        }},
+        {label: 'Change PIN', icon: <ShieldIcon />, arrow: true, onPress: () => {
+          setOldPin('');
+          setNewPin('');
+          setShowPinModal(true);
+        }},
         {label: 'Biometric Login', icon: <ShieldIcon />, toggle: true, value: biometric, onToggle: setBiometric},
       ],
     },
@@ -82,6 +191,11 @@ const ProfileScreen: React.FC = () => {
     },
   ];
 
+  // Stats from context
+  const compliance = monthlyStats.totalDays > 0
+    ? Math.round(((monthlyStats.presentCount + monthlyStats.lateCount) / monthlyStats.totalDays) * 100)
+    : 0;
+
   return (
     <GradientBackground style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000000" />
@@ -92,30 +206,39 @@ const ProfileScreen: React.FC = () => {
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
 
-        {/* Avatar card */}
+        {/* Avatar card — uses real user data */}
         <Card style={styles.avatarCard} glow="cyan">
           <View style={styles.avatarRow}>
             <View style={styles.avatarCircle}>
               <UserCircleIcon size={52} />
             </View>
             <View style={styles.avatarInfo}>
-              <Text style={styles.avatarName}>Rajesh Kumar</Text>
+              <Text style={styles.avatarName}>{userName}</Text>
               <Text style={styles.avatarRole}>Field Officer</Text>
               <View style={styles.avatarBadge}>
                 <ShieldIcon size={12} />
-                <Text style={styles.avatarBadgeText}>Biometric Enrolled</Text>
+                <Text style={styles.avatarBadgeText}>
+                  {faceEnrolled ? 'Biometric Enrolled' : 'Not Enrolled'}
+                </Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.editBtn} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.editBtn}
+              activeOpacity={0.7}
+              onPress={() => {
+                setEditName(currentUser?.full_name || '');
+                setEditEmail(currentUser?.email || '');
+                setShowEditModal(true);
+              }}>
               <EditIcon size={16} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.avatarStats}>
             {[
-              {label: 'Employee ID', value: 'NHAI-2024-0042'},
+              {label: 'Employee ID', value: employeeId},
               {label: 'Department', value: 'Operations'},
-              {label: 'Joined', value: 'Jan 2024'},
+              {label: 'Joined', value: joinedDate},
             ].map((s, i) => (
               <View key={i} style={[styles.avatarStatItem, i > 0 && styles.avatarStatBorder]}>
                 <Text style={styles.avatarStatLabel}>{s.label}</Text>
@@ -125,14 +248,14 @@ const ProfileScreen: React.FC = () => {
           </View>
         </Card>
 
-        {/* Contact info */}
+        {/* Contact info — from DB */}
         <Text style={styles.sectionTitle}>Contact Information</Text>
         <Card style={styles.contactCard}>
           {[
-            {label: 'Email',    value: 'rajesh.kumar@nhai.gov.in'},
-            {label: 'Phone',    value: '+91 98765 43210'},
+            {label: 'Email',    value: userEmail},
+            {label: 'Emp ID',   value: employeeId},
             {label: 'Location', value: 'NHAI HQ, New Delhi'},
-            {label: 'Manager',  value: 'Priya Sharma'},
+            {label: 'Manager',  value: 'Admin'},
           ].map((c, i) => (
             <View key={i} style={[styles.contactRow, i > 0 && styles.contactBorder]}>
               <Text style={styles.contactLabel}>{c.label}</Text>
@@ -141,14 +264,14 @@ const ProfileScreen: React.FC = () => {
           ))}
         </Card>
 
-        {/* This month summary */}
+        {/* This month summary — from DB stats */}
         <Text style={styles.sectionTitle}>This Month</Text>
         <View style={styles.statsRow}>
           {[
-            {label: 'Present',     value: '18', color: theme.colors.accentCyan},
-            {label: 'Absent',      value: '3',  color: theme.colors.error},
-            {label: 'On Leave',    value: '1',  color: theme.colors.meshBlue},
-            {label: 'Compliance',  value: '90%',color: theme.colors.success},
+            {label: 'Present',     value: String(monthlyStats.presentCount), color: theme.colors.accentCyan},
+            {label: 'Absent',      value: String(monthlyStats.absentCount),  color: theme.colors.error},
+            {label: 'Late',        value: String(monthlyStats.lateCount),    color: theme.colors.warning},
+            {label: 'Compliance',  value: `${compliance}%`,                  color: theme.colors.success},
           ].map((s, i) => (
             <Card key={i} style={styles.statCard}>
               <Text style={[styles.statValue, {color: s.color}]}>{s.value}</Text>
@@ -163,7 +286,12 @@ const ProfileScreen: React.FC = () => {
             <Text style={styles.sectionTitle}>{group.section}</Text>
             <Card style={styles.menuCard}>
               {group.items.map((item: any, ii) => (
-                <View key={ii} style={[styles.menuRow, ii > 0 && styles.menuBorder]}>
+                <TouchableOpacity
+                  key={ii}
+                  style={[styles.menuRow, ii > 0 && styles.menuBorder]}
+                  activeOpacity={item.toggle ? 1 : 0.7}
+                  onPress={item.onPress}
+                  disabled={!!item.toggle}>
                   <View style={styles.menuIcon}>{item.icon}</View>
                   <Text style={styles.menuLabel}>{item.label}</Text>
                   {item.toggle !== undefined ? (
@@ -181,13 +309,13 @@ const ProfileScreen: React.FC = () => {
                   ) : (
                     <ChevronRightIcon />
                   )}
-                </View>
+                </TouchableOpacity>
               ))}
             </Card>
           </View>
         ))}
 
-        {/* Face enrollment status */}
+        {/* Face enrollment status — from DB */}
         <Text style={styles.sectionTitle}>Biometric Status</Text>
         <Card style={styles.biometricCard} glow="cyan">
           <View style={styles.biometricRow}>
@@ -195,17 +323,25 @@ const ProfileScreen: React.FC = () => {
               <ShieldIcon size={24} />
             </View>
             <View style={styles.biometricInfo}>
-              <Text style={styles.biometricTitle}>Face Enrolled</Text>
-              <Text style={styles.biometricSub}>3 angles · Enrolled 15 Jun 2024</Text>
+              <Text style={styles.biometricTitle}>
+                {faceEnrolled ? 'Face Enrolled' : 'Not Enrolled'}
+              </Text>
+              <Text style={styles.biometricSub}>
+                {faceEnrolled
+                  ? `${faceAngles} angle${faceAngles !== 1 ? 's' : ''} · Enrolled ${joinedDate}`
+                  : 'Complete face enrollment to enable biometric attendance'}
+              </Text>
             </View>
-            <View style={styles.biometricBadge}>
-              <Text style={styles.biometricBadgeText}>Active</Text>
+            <View style={[styles.biometricBadge, !faceEnrolled && {borderColor: theme.colors.warning, backgroundColor: 'rgba(255,179,0,0.1)'}]}>
+              <Text style={[styles.biometricBadgeText, !faceEnrolled && {color: theme.colors.warning}]}>
+                {faceEnrolled ? 'Active' : 'Pending'}
+              </Text>
             </View>
           </View>
         </Card>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.logoutBtn} activeOpacity={0.7} onPress={handleLogout}>
           <LogoutIcon />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
@@ -214,6 +350,68 @@ const ProfileScreen: React.FC = () => {
 
         <View style={{height: 20}} />
       </ScrollView>
+
+      {/* ──── Change PIN Modal ──── */}
+      <Modal visible={showPinModal} transparent animationType="fade" onRequestClose={() => setShowPinModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Change PIN</Text>
+            <Text style={styles.modalSub}>Enter your current PIN and then your new 6-digit PIN.</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Current PIN"
+              placeholderTextColor="#4A5568"
+              keyboardType="number-pad"
+              maxLength={6}
+              secureTextEntry
+              value={oldPin}
+              onChangeText={setOldPin}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="New PIN"
+              placeholderTextColor="#4A5568"
+              keyboardType="number-pad"
+              maxLength={6}
+              secureTextEntry
+              value={newPin}
+              onChangeText={setNewPin}
+            />
+            <View style={styles.modalBtnRow}>
+              <Button title="Save" variant="primary" onPress={handleChangePin} style={{flex: 1}} />
+              <Button title="Cancel" variant="ghost" onPress={() => setShowPinModal(false)} style={{flex: 1}} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ──── Edit Profile Modal ──── */}
+      <Modal visible={showEditModal} transparent animationType="fade" onRequestClose={() => setShowEditModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Full Name"
+              placeholderTextColor="#4A5568"
+              value={editName}
+              onChangeText={setEditName}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Email"
+              placeholderTextColor="#4A5568"
+              keyboardType="email-address"
+              value={editEmail}
+              onChangeText={setEditEmail}
+            />
+            <View style={styles.modalBtnRow}>
+              <Button title="Save" variant="primary" onPress={handleEditProfile} style={{flex: 1}} />
+              <Button title="Cancel" variant="ghost" onPress={() => setShowEditModal(false)} style={{flex: 1}} />
+            </View>
+          </View>
+        </View>
+      </Modal>
     </GradientBackground>
   );
 };
@@ -362,6 +560,48 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
   },
   version: {textAlign: 'center', fontSize: 11, color: '#3A4A60'},
+
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: theme.colors.surfaceElevated,
+    borderRadius: theme.spacing.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    padding: theme.spacing.xl,
+    gap: theme.spacing.md,
+  },
+  modalTitle: {
+    fontSize: theme.typography.sizes.h4,
+    fontWeight: theme.typography.weights.bold as any,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+  },
+  modalSub: {
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
+  modalInput: {
+    backgroundColor: theme.colors.surfaceDark,
+    borderRadius: theme.spacing.radius.md,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: 12,
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: theme.colors.textPrimary,
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
 });
 
 export default ProfileScreen;

@@ -1,9 +1,10 @@
 /**
  * AuthEdge — History Tab
  * Calendar with attendance dots, month selector, PDF download (mock).
+ * Wired to SQLite via AppContext + AttendanceService.
  */
 
-import React, {useState} from 'react';
+import React, {useState, useEffect, useCallback} from 'react';
 import {
   View,
   Text,
@@ -16,6 +17,9 @@ import {
 import Svg, {Path, Circle} from 'react-native-svg';
 import {theme} from '../../theme';
 import {GradientBackground, Card, Button} from '../../components/common';
+import {useApp} from '../../context/AppContext';
+import {AttendanceService} from '../../services';
+import {formatDisplayDate, formatDisplayTime, toDBDate} from '../../utils';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const MONTH_NAMES = [
@@ -24,30 +28,7 @@ const MONTH_NAMES = [
 ];
 const DAY_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
-// Mock attendance data — keyed by "YYYY-MM-DD"
-type DayStatus = 'present' | 'absent' | 'pending' | 'leave' | 'weekend';
-const MOCK_ATTENDANCE: Record<string, DayStatus> = {};
-
-// Populate current month with mock data
-const now = new Date();
-for (let d = 1; d < now.getDate(); d++) {
-  const dd = String(d).padStart(2, '0');
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const key = `${now.getFullYear()}-${mm}-${dd}`;
-  const dow = new Date(now.getFullYear(), now.getMonth(), d).getDay();
-  if (dow === 0 || dow === 6) {
-    MOCK_ATTENDANCE[key] = 'weekend';
-  } else if (d % 9 === 0) {
-    MOCK_ATTENDANCE[key] = 'absent';
-  } else if (d % 7 === 0) {
-    MOCK_ATTENDANCE[key] = 'leave';
-  } else {
-    MOCK_ATTENDANCE[key] = 'present';
-  }
-}
-// Today = pending
-const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-if (now.getDay() !== 0 && now.getDay() !== 6) MOCK_ATTENDANCE[todayKey] = 'pending';
+type DayStatus = 'present' | 'absent' | 'pending' | 'late' | 'weekend' | undefined;
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 const ChevronLeft = ({color = theme.colors.textPrimary}: {color?: string}) => (
@@ -77,6 +58,7 @@ function getFirstDayOfMonth(year: number, month: number) {
 function getStatusColor(status?: DayStatus) {
   switch (status) {
     case 'present':  return theme.colors.accentCyan;
+    case 'late':     return theme.colors.warning;
     case 'absent':   return theme.colors.error;
     case 'pending':  return theme.colors.warning;
     case 'leave':    return theme.colors.meshBlue;
@@ -86,13 +68,40 @@ function getStatusColor(status?: DayStatus) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 const HistoryScreen: React.FC = () => {
+  const {currentUser} = useApp();
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
   const [year, setYear]   = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [selected, setSelected] = useState<string | null>(null);
 
+  // Real data from DB
+  const [calendarData, setCalendarData] = useState<Record<string, any>>({});
+  const [monthStats, setMonthStats] = useState({present: 0, absent: 0, late: 0, total: 0, percentage: 0});
+
   const daysInMonth  = getDaysInMonth(year, month);
   const firstDayOfWeek = getFirstDayOfMonth(year, month);
   const isFutureMonth = year > now.getFullYear() || (year === now.getFullYear() && month > now.getMonth());
+
+  // Load calendar data from DB whenever month/year changes
+  const loadCalendarData = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const yearMonth = `${year}-${String(month + 1).padStart(2, '0')}`;
+      const data = await AttendanceService.getMonthCalendarData(currentUser.id, yearMonth);
+      setCalendarData(data);
+
+      const stats = await AttendanceService.getMonthlyStats(currentUser.id, yearMonth);
+      setMonthStats(stats);
+    } catch (e) {
+      console.warn('[HistoryScreen] Error loading calendar data:', e);
+    }
+  }, [currentUser, year, month]);
+
+  useEffect(() => {
+    loadCalendarData();
+  }, [loadCalendarData]);
 
   const prevMonth = () => {
     if (month === 0) { setMonth(11); setYear(y => y - 1); }
@@ -112,25 +121,22 @@ const HistoryScreen: React.FC = () => {
     ...Array.from({length: daysInMonth}, (_, i) => i + 1),
   ];
 
-  // Monthly stats
-  let present = 0, absent = 0, pending = 0, leave = 0;
-  for (let d = 1; d <= daysInMonth; d++) {
-    const mm = String(month + 1).padStart(2, '0');
-    const dd = String(d).padStart(2, '0');
-    const key = `${year}-${mm}-${dd}`;
-    const s = MOCK_ATTENDANCE[key];
-    if (s === 'present') present++;
-    else if (s === 'absent') absent++;
-    else if (s === 'pending') pending++;
-    else if (s === 'leave') leave++;
-  }
+  // Derive status for a given date key from DB calendar data
+  const getDateStatus = (dateKey: string): DayStatus => {
+    const entry = calendarData[dateKey];
+    if (entry?.record) {
+      return entry.record.status as DayStatus;
+    }
+    return undefined;
+  };
+
+  // Get record details for selected day
+  const selectedRecord = selected ? calendarData[selected]?.record : null;
+  const selectedStatus = selected ? getDateStatus(selected) : undefined;
 
   const handleDownload = () => {
     Alert.alert('PDF Download', `Attendance report for ${MONTH_NAMES[month]} ${year} will be downloaded as PDF.`);
   };
-
-  const selectedKey = selected;
-  const selectedStatus = selectedKey ? MOCK_ATTENDANCE[selectedKey] : undefined;
 
   return (
     <GradientBackground style={styles.container}>
@@ -178,7 +184,7 @@ const HistoryScreen: React.FC = () => {
               const mm = String(month + 1).padStart(2, '0');
               const dd = String(day).padStart(2, '0');
               const key = `${year}-${mm}-${dd}`;
-              const status = MOCK_ATTENDANCE[key];
+              const status = getDateStatus(key);
               const dotColor = getStatusColor(status);
               const isToday = key === todayKey;
               const isSelected = key === selected;
@@ -218,7 +224,7 @@ const HistoryScreen: React.FC = () => {
             {[
               {color: theme.colors.accentCyan, label: 'Present'},
               {color: theme.colors.error,      label: 'Absent'},
-              {color: theme.colors.warning,    label: 'Pending'},
+              {color: theme.colors.warning,    label: 'Late'},
               {color: theme.colors.meshBlue,   label: 'Leave'},
             ].map(l => (
               <View key={l.label} style={styles.legendItem}>
@@ -240,20 +246,30 @@ const HistoryScreen: React.FC = () => {
                 {selectedStatus ? selectedStatus.charAt(0).toUpperCase() + selectedStatus.slice(1) : 'No Record'}
               </Text>
             </View>
-            {selectedStatus === 'present' && (
-              <Text style={styles.detailInfo}>Check-in: 09:08 AM · Check-out: 06:02 PM · 8h 54m</Text>
+            {selectedRecord && (
+              <Text style={styles.detailInfo}>
+                {selectedRecord.check_in_time
+                  ? `Check-in: ${selectedRecord.check_in_time}`
+                  : ''}
+                {selectedRecord.check_out_time
+                  ? ` · Check-out: ${selectedRecord.check_out_time}`
+                  : ''}
+                {selectedRecord.verification_method
+                  ? ` · Via ${selectedRecord.verification_method}`
+                  : ''}
+              </Text>
             )}
           </Card>
         )}
 
-        {/* Monthly summary */}
+        {/* Monthly summary — from DB stats */}
         <Text style={styles.sectionTitle}>Summary — {MONTH_NAMES[month]}</Text>
         <View style={styles.summaryGrid}>
           {[
-            {label: 'Present',  value: present, color: theme.colors.accentCyan},
-            {label: 'Absent',   value: absent,  color: theme.colors.error},
-            {label: 'Pending',  value: pending, color: theme.colors.warning},
-            {label: 'On Leave', value: leave,   color: theme.colors.meshBlue},
+            {label: 'Present',  value: monthStats.presentCount, color: theme.colors.accentCyan},
+            {label: 'Absent',   value: monthStats.absentCount,  color: theme.colors.error},
+            {label: 'Late',     value: monthStats.lateCount,    color: theme.colors.warning},
+            {label: 'Total',    value: monthStats.totalDays,    color: theme.colors.meshBlue},
           ].map((s, i) => (
             <Card key={i} style={styles.summaryCard}>
               <Text style={[styles.summaryVal, {color: s.color}]}>{s.value}</Text>

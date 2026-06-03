@@ -19,6 +19,7 @@ import type {ScreenProps} from '../navigation/types';
 import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
 import {GradientBackground, StatusBadge} from '../components/common';
+import {useApp} from '../context/AppContext';
 
 const {width} = Dimensions.get('window');
 const AuthEdgeLogo = require('../assets/images/AuthEdge_logo.png');
@@ -73,6 +74,7 @@ const EyeOffIcon: React.FC<{size?: number; color?: string}> = ({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
+  const {login} = useApp();
   const [pin, setPin]         = useState('');
   const [showPin, setShowPin] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -88,17 +90,31 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
   ];
 
   useEffect(() => {
-    if (pin.length === 6) {
-      setErrorMsg('');
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(() => {
-        navigation.replace(ROUTES.DASHBOARD);
-      });
-    }
-  }, [pin, fadeAnim, navigation]);
+    const attemptLogin = async () => {
+      if (pin.length === 6) {
+        setErrorMsg('');
+        const success = await login(pin);
+        if (success) {
+          Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 200,
+            useNativeDriver: true,
+          }).start(() => {
+            navigation.replace(ROUTES.DASHBOARD);
+          });
+        } else {
+          setErrorMsg('Invalid PIN. Please try again.');
+          triggerShake();
+          setTimeout(() => {
+            setPin('');
+            setErrorMsg('');
+          }, 1200);
+        }
+      }
+    };
+    
+    attemptLogin();
+  }, [pin, fadeAnim, navigation, login]);
 
   const triggerShake = () => {
     Animated.sequence([

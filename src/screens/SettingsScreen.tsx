@@ -8,9 +8,11 @@
  * - Adjust synchronization parameters (sync toggle, intervals).
  * - Monitor storage usage (templates count, DB size).
  * - Trigger secure purge (NIST 800-88 compliant mock wipe).
+ *
+ * Wired to AppContext for persistent settings and real DB values.
  */
 
-import React, {useState, useRef} from 'react';
+import React, {useState, useRef, useCallback} from 'react';
 import {
   View,
   Text,
@@ -29,6 +31,7 @@ import Svg, {Path, Circle} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
 import {theme} from '../theme';
 import {GradientBackground, Card, Button} from '../components/common';
+import {useApp} from '../context/AppContext';
 
 const AuthEdgeLogo = require('../assets/images/AuthEdge_logo.png');
 
@@ -74,13 +77,21 @@ const ShieldIcon: React.FC<{size?: number; color?: string}> = ({
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
-  // Settings States
-  const [resolution, setResolution] = useState<'1080p' | '720p' | '480p'>('720p');
-  const [isFrontCamera, setIsFrontCamera] = useState(true);
-  const [isAutoSync, setIsAutoSync] = useState(true);
-  const [syncInterval, setSyncInterval] = useState<'30s' | '1m' | '5m' | '15m'>('5m');
-  const [dbSize, setDbSize] = useState('342 KB');
-  const [templatesCount, setTemplatesCount] = useState(12);
+  // Pull live settings from AppContext
+  const {
+    settings,
+    dbSize,
+    templatesCount,
+    updateSetting,
+    changePin,
+    securePurge,
+  } = useApp();
+
+  // Local setting state derived from context
+  const resolution = settings.resolution;
+  const isFrontCamera = settings.front_camera;
+  const isAutoSync = settings.auto_sync;
+  const syncFrequency = settings.sync_frequency;
 
   // Modals & Purge states
   const [showPurgeModal, setShowPurgeModal] = useState(false);
@@ -88,42 +99,49 @@ const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
 
   const purgeProgress = useRef(new Animated.Value(0)).current;
 
-  // Toggle helpers
-  const toggleCamera = () => setIsFrontCamera(prev => !prev);
-  const toggleAutoSync = () => setIsAutoSync(prev => !prev);
+  // Toggle helpers — persist to DB via AppContext
+  const toggleCamera = useCallback(async () => {
+    await updateSetting('front_camera', (!isFrontCamera).toString());
+  }, [isFrontCamera, updateSetting]);
 
-  const cycleResolution = () => {
-    setResolution(prev => {
-      if (prev === '1080p') return '720p';
-      if (prev === '720p') return '480p';
-      return '1080p';
-    });
-  };
+  const toggleAutoSync = useCallback(async () => {
+    await updateSetting('auto_sync', (!isAutoSync).toString());
+  }, [isAutoSync, updateSetting]);
 
-  const cycleInterval = () => {
-    setSyncInterval(prev => {
-      if (prev === '30s') return '1m';
-      if (prev === '1m') return '5m';
-      if (prev === '5m') return '15m';
-      return '30s';
-    });
-  };
+  const cycleResolution = useCallback(async () => {
+    let next: string;
+    if (resolution === '1080p') next = '720p';
+    else if (resolution === '720p') next = '480p';
+    else next = '1080p';
+    await updateSetting('resolution', next);
+  }, [resolution, updateSetting]);
 
-  const handleSecurePurge = () => {
+  const cycleSyncFrequency = useCallback(async () => {
+    let next: string;
+    if (syncFrequency === 'Hourly') next = 'Daily';
+    else if (syncFrequency === 'Daily') next = 'Weekly';
+    else next = 'Hourly';
+    await updateSetting('sync_frequency', next);
+  }, [syncFrequency, updateSetting]);
+
+  const handleSecurePurge = useCallback(async () => {
     setPurgeStep('purging');
     purgeProgress.setValue(0);
 
     Animated.timing(purgeProgress, {
       toValue: 1,
       duration: 2000,
-      useNativeDriver: false, // Layout width animation
-    }).start(() => {
-      setPurgeStep('done');
-      // Reset simulated counts
-      setDbSize('8 KB');
-      setTemplatesCount(0);
+      useNativeDriver: false,
+    }).start(async () => {
+      try {
+        await securePurge();
+        setPurgeStep('done');
+      } catch (e) {
+        Alert.alert('Error', 'Secure purge failed.');
+        setPurgeStep('idle');
+      }
     });
-  };
+  }, [securePurge, purgeProgress]);
 
   const resetPurgeModal = () => {
     setShowPurgeModal(false);
@@ -172,7 +190,7 @@ const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
           </Card>
         </View>
 
-        {/* SECTION: Camera Parameters */}
+        {/* SECTION: Camera Parameters — persisted */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Camera Configuration</Text>
           <Card style={styles.sectionCard}>
@@ -213,7 +231,7 @@ const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
             <TouchableOpacity
               activeOpacity={0.7}
               style={[styles.settingRow, styles.rowBorder]}
-              onPress={() => Alert.alert('Secure Action', 'PIN modification is locked to current admin session')}
+              onPress={() => Alert.alert('Secure Action', 'PIN modification is available from Profile > Change PIN')}
             >
               <Text style={styles.settingLabel}>Change Passcode</Text>
               <Text style={styles.settingValueAccent}>Modify →</Text>
@@ -221,7 +239,7 @@ const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
           </Card>
         </View>
 
-        {/* SECTION: Cloud Synchronization */}
+        {/* SECTION: Cloud Synchronization — persisted */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Cloud Sync (Amplify)</Text>
           <Card style={styles.sectionCard}>
@@ -236,17 +254,17 @@ const SettingsScreen: React.FC<ScreenProps<'Settings'>> = ({navigation}) => {
             </View>
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={cycleInterval}
+              onPress={cycleSyncFrequency}
               disabled={!isAutoSync}
               style={[styles.settingRow, styles.rowBorder, !isAutoSync && styles.rowDisabled]}
             >
               <Text style={styles.settingLabel}>Sync Frequency</Text>
-              <Text style={styles.settingValueAccent}>{syncInterval}</Text>
+              <Text style={styles.settingValueAccent}>{syncFrequency}</Text>
             </TouchableOpacity>
           </Card>
         </View>
 
-        {/* SECTION: Storage Usage */}
+        {/* SECTION: Storage Usage — from DB */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Database Storage</Text>
           <Card style={styles.sectionCard}>
