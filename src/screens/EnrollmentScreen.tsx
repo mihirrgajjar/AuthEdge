@@ -10,7 +10,7 @@
  * Uses a fallback animated scanner when camera is unavailable.
  */
 
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -19,9 +19,11 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
+  Animated,
 } from 'react-native';
 import Svg, {Path} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
+import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
 import {GradientBackground, Button, Card} from '../components/common';
 import {FaceGuideOverlay, QualityIndicator, CaptureButton} from '../components/enrollment';
@@ -106,7 +108,7 @@ const INSTRUCTIONS = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-type WizardStep = 'instructions' | 'capture' | 'quality' | 'confirmation';
+type WizardStep = 'instructions' | 'capture' | 'quality' | 'confirmation' | 'setpin';
 
 const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
   navigation,
@@ -114,6 +116,21 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
   const [step, setStep] = useState<WizardStep>('instructions');
   const [captureIndex, setCaptureIndex] = useState(0);
   const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinStep, setPinStep] = useState<'enter' | 'confirm'>('enter');
+  const [pinError, setPinError] = useState('');
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -10, duration: 50, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 0, duration: 50, useNativeDriver: true}),
+    ]).start();
+  };
 
   // ─── Navigation helpers ───────
 
@@ -133,6 +150,15 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
       case 'confirmation':
         setStep('quality');
         break;
+      case 'setpin':
+        if (pinStep === 'confirm') {
+          setPinStep('enter');
+          setConfirmPin('');
+          setPinError('');
+        } else {
+          setStep('confirmation');
+        }
+        break;
     }
   };
 
@@ -145,8 +171,41 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
   };
 
   const handleSave = () => {
-    // Phase 9 will hook into the actual DB save
-    navigation.goBack();
+    setStep('setpin');
+  };
+
+  // ─── PIN keypad handler ───────
+  const handlePinKey = (key: string) => {
+    setPinError('');
+    const currentPin = pinStep === 'enter' ? pin : confirmPin;
+    const setter = pinStep === 'enter' ? setPin : setConfirmPin;
+
+    if (key === 'back') {
+      setter(prev => prev.slice(0, -1));
+    } else if (currentPin.length < 6) {
+      const newPin = currentPin + key;
+      setter(newPin);
+
+      if (newPin.length === 6) {
+        if (pinStep === 'enter') {
+          // Move to confirm step after short delay
+          setTimeout(() => setPinStep('confirm'), 300);
+        } else {
+          // Validate both PINs match
+          if (newPin === pin) {
+            // Success — navigate to Dashboard
+            setTimeout(() => navigation.replace(ROUTES.DASHBOARD), 400);
+          } else {
+            setPinError("PINs don't match. Try again.");
+            triggerShake();
+            setTimeout(() => {
+              setConfirmPin('');
+              setPinError('');
+            }, 1200);
+          }
+        }
+      }
+    }
   };
 
   // ─── Step title ───────
@@ -154,7 +213,8 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
     instructions: 'Enroll Face',
     capture: 'Capture Face',
     quality: 'Quality Review',
-    confirmation: 'Confirm & Save',
+    confirmation: 'Your Details',
+    setpin: 'Set Your PIN',
   };
 
   // ─── Render Steps ─────
@@ -297,7 +357,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
 
       <Text style={styles.confirmationTitle}>Face Captured Successfully</Text>
       <Text style={styles.confirmationSubtitle}>
-        Enter the personnel's name or ID to complete enrollment
+        Complete your registration
       </Text>
 
       <Card style={styles.inputCard}>
@@ -313,7 +373,18 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
       </Card>
 
       <Card style={styles.inputCard}>
-        <Text style={styles.inputLabel}>Employee ID (Optional)</Text>
+        <Text style={styles.inputLabel}>Email Address</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. rajesh@example.com"
+          placeholderTextColor={theme.colors.textSecondary}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+      </Card>
+
+      <Card style={styles.inputCard}>
+        <Text style={styles.inputLabel}>Employee ID</Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. NHAI-2024-0012"
@@ -339,7 +410,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
       </Card>
 
       <Button
-        title="Save & Enroll"
+        title="Continue to Set PIN"
         variant="primary"
         onPress={handleSave}
         disabled={name.trim().length < 2}
@@ -347,6 +418,101 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
       />
     </ScrollView>
   );
+
+  const renderSetPin = () => {
+    const currentPin = pinStep === 'enter' ? pin : confirmPin;
+    const keypadKeys = [
+      ['1', '2', '3'],
+      ['4', '5', '6'],
+      ['7', '8', '9'],
+      ['', '0', 'back'],
+    ];
+
+    return (
+      <View style={styles.setPinContent}>
+        <View style={styles.setPinHeader}>
+          <Text style={styles.setPinTitle}>
+            {pinStep === 'enter' ? 'Create a 6-digit PIN' : 'Confirm your PIN'}
+          </Text>
+          <Text style={styles.setPinSubtitle}>
+            {pinStep === 'enter'
+              ? 'You will use this PIN to log in'
+              : 'Enter the same PIN again to confirm'}
+          </Text>
+        </View>
+
+        {/* Dots */}
+        <Animated.View
+          style={[
+            styles.pinDotsRow,
+            {transform: [{translateX: shakeAnim}]},
+          ]}>
+          {Array.from({length: 6}).map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.pinDot,
+                i < currentPin.length && styles.pinDotFilled,
+                pinError ? styles.pinDotError : null,
+              ]}
+            />
+          ))}
+        </Animated.View>
+
+        {pinError ? (
+          <Text style={styles.pinErrorText}>{pinError}</Text>
+        ) : (
+          <Text style={styles.pinStepLabel}>
+            {pinStep === 'enter' ? 'Step 1 of 2' : 'Step 2 of 2'}
+          </Text>
+        )}
+
+        {/* Keypad */}
+        <View style={styles.pinKeypad}>
+          {keypadKeys.map((row, rowIdx) => (
+            <View key={rowIdx} style={styles.pinKeypadRow}>
+              {row.map((key, keyIdx) => {
+                if (key === '') {
+                  return <View key={keyIdx} style={styles.pinKeyEmpty} />;
+                }
+                return (
+                  <TouchableOpacity
+                    key={keyIdx}
+                    activeOpacity={0.6}
+                    onPress={() => handlePinKey(key)}
+                    style={[
+                      styles.pinKey,
+                      key === 'back' && styles.pinKeySpecial,
+                    ]}>
+                    {key === 'back' ? (
+                      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+                        <Path
+                          d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"
+                          stroke={theme.colors.textSecondary}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <Path
+                          d="M18 9l-6 6M12 9l6 6"
+                          stroke={theme.colors.textSecondary}
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </Svg>
+                    ) : (
+                      <Text style={styles.pinKeyText}>{key}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   return (
     <GradientBackground style={styles.container}>
@@ -366,22 +532,22 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
 
       {/* Step Indicator */}
       <View style={styles.stepIndicator}>
-        {(['instructions', 'capture', 'quality', 'confirmation'] as WizardStep[]).map(
+        {(['instructions', 'capture', 'quality', 'confirmation', 'setpin'] as WizardStep[]).map(
           (s, index) => (
             <View key={s} style={styles.stepDotRow}>
               <View
                 style={[
                   styles.stepDot,
                   step === s && styles.stepDotActive,
-                  (['instructions', 'capture', 'quality', 'confirmation'] as WizardStep[]).indexOf(step) > index &&
+                  (['instructions', 'capture', 'quality', 'confirmation', 'setpin'] as WizardStep[]).indexOf(step) > index &&
                     styles.stepDotDone,
                 ]}
               />
-              {index < 3 && (
+              {index < 4 && (
                 <View
                   style={[
                     styles.stepLine,
-                    (['instructions', 'capture', 'quality', 'confirmation'] as WizardStep[]).indexOf(step) > index &&
+                    (['instructions', 'capture', 'quality', 'confirmation', 'setpin'] as WizardStep[]).indexOf(step) > index &&
                       styles.stepLineDone,
                   ]}
                 />
@@ -396,6 +562,7 @@ const EnrollmentScreen: React.FC<ScreenProps<'Enrollment'>> = ({
       {step === 'capture' && renderCapture()}
       {step === 'quality' && renderQuality()}
       {step === 'confirmation' && renderConfirmation()}
+      {step === 'setpin' && renderSetPin()}
     </GradientBackground>
   );
 };
@@ -717,6 +884,107 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.sizes.bodyMedium,
     color: theme.colors.textSecondary,
     fontWeight: theme.typography.weights.semibold as any,
+  },
+
+  // Set PIN step
+  setPinContent: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: theme.spacing.lg,
+    justifyContent: 'space-between',
+    paddingBottom: 30,
+  },
+  setPinHeader: {
+    alignItems: 'center',
+    marginTop: theme.spacing.lg,
+  },
+  setPinTitle: {
+    fontSize: theme.typography.sizes.h3,
+    fontWeight: theme.typography.weights.bold as any,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: theme.spacing.sm,
+  },
+  setPinSubtitle: {
+    fontSize: theme.typography.sizes.bodyMedium,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+  },
+  pinDotsRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginVertical: theme.spacing.xl,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: theme.colors.surfaceBorder,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  pinDotFilled: {
+    backgroundColor: theme.colors.accentCyan,
+    borderColor: 'rgba(0, 229, 160, 0.3)',
+    shadowColor: theme.colors.accentCyan,
+    shadowOffset: {width: 0, height: 0},
+    shadowOpacity: 0.8,
+    shadowRadius: 5,
+  },
+  pinDotError: {
+    backgroundColor: theme.colors.error,
+    borderColor: 'rgba(255, 82, 82, 0.3)',
+  },
+  pinErrorText: {
+    fontSize: theme.typography.sizes.bodySmall,
+    color: theme.colors.error,
+    fontWeight: theme.typography.weights.semibold as any,
+    marginBottom: theme.spacing.sm,
+  },
+  pinStepLabel: {
+    fontSize: theme.typography.sizes.caption,
+    color: theme.colors.textSecondary,
+    letterSpacing: 1,
+    marginBottom: theme.spacing.sm,
+  },
+  pinKeypad: {
+    width: '100%',
+    maxWidth: 300,
+  },
+  pinKeypadRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.md,
+  },
+  pinKey: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: theme.colors.surfaceDark,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  pinKeySpecial: {
+    backgroundColor: 'rgba(6,11,24,0.4)',
+    borderColor: 'transparent',
+  },
+  pinKeyEmpty: {
+    width: 72,
+    height: 72,
+  },
+  pinKeyText: {
+    fontSize: theme.typography.sizes.h3,
+    fontWeight: theme.typography.weights.semibold as any,
+    color: theme.colors.textPrimary,
   },
 });
 

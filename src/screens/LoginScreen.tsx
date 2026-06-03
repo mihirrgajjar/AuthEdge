@@ -20,7 +20,7 @@ import {
   Animated,
   Dimensions,
 } from 'react-native';
-import Svg, {Path, Circle} from 'react-native-svg';
+import Svg, {Path} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
 import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
@@ -30,32 +30,6 @@ const {width} = Dimensions.get('window');
 const AuthEdgeLogo = require('../assets/images/AuthEdge_logo.png');
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
-
-const FingerprintIcon: React.FC<{size?: number; color?: string}> = ({
-  size = 28,
-  color = theme.colors.accentCyan,
-}) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M12 2a10 10 0 00-6.88 2.77M3.12 10.5a9 9 0 00.91 3.5M6.47 18.27A9.03 9.03 0 0012 20a9 9 0 007.8-4.5M20.88 10.5c.08-.5.12-1 .12-1.5a10 10 0 00-4.5-8.28"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-    <Path
-      d="M12 6a6 6 0 00-4.13 1.66M6.68 12.5a5.1 5.1 0 001.07 2.77M9.27 17.5a6.03 6.03 0 006.18-1.5M16.8 11.5c.07-.3.1-.63.1-.96A6 6 0 0012 6M12 9.5a2.5 2.5 0 00-2.5 2.5v1"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-    <Path
-      d="M9.5 15.5a2.5 2.5 0 005 0v-3.5a2.5 2.5 0 00-5 0M12 17.5a4.5 4.5 0 004.5-4.5v-1"
-      stroke={color}
-      strokeWidth="1.5"
-      strokeLinecap="round"
-    />
-  </Svg>
-);
 
 const BackspaceIcon: React.FC<{size?: number; color?: string}> = ({
   size = 24,
@@ -83,41 +57,30 @@ const BackspaceIcon: React.FC<{size?: number; color?: string}> = ({
 
 const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
   const [pin, setPin] = useState('');
-  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Shake animation for incorrect PIN
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const bioScale = useRef(new Animated.Value(1)).current;
 
-  // Keypad numbers grid
   const keypadKeys = [
     ['1', '2', '3'],
     ['4', '5', '6'],
     ['7', '8', '9'],
-    ['bio', '0', 'back'],
+    ['', '0', 'back'],
   ];
 
   // Detect when PIN is completed (6 digits)
   useEffect(() => {
     if (pin.length === 6) {
-      if (pin === '123456') {
-        // Correct Admin PIN
-        setErrorMsg('');
-        Animated.timing(fadeAnim, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }).start(() => {
-          navigation.replace(ROUTES.DASHBOARD);
-        });
-      } else {
-        // Incorrect PIN - Trigger shake animation
-        setErrorMsg('Invalid Admin Passcode');
-        triggerShake();
-        setPin('');
-      }
+      // Mock validation - in real app, verify against stored PIN
+      setErrorMsg('');
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        navigation.replace(ROUTES.DASHBOARD);
+      });
     }
   }, [pin]);
 
@@ -137,30 +100,11 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
     setErrorMsg('');
     if (key === 'back') {
       setPin(prev => prev.slice(0, -1));
-    } else if (key === 'bio') {
-      handleBiometricUnlock();
-    } else {
+    } else if (key !== '') {
       if (pin.length < 6) {
         setPin(prev => prev + key);
       }
     }
-  };
-
-  const handleBiometricUnlock = () => {
-    setIsBiometricLoading(true);
-    setErrorMsg('');
-    
-    // Animate biometric icon pulse
-    Animated.sequence([
-      Animated.timing(bioScale, { toValue: 1.2, duration: 200, useNativeDriver: true }),
-      Animated.timing(bioScale, { toValue: 1.0, duration: 200, useNativeDriver: true }),
-    ]).start();
-
-    // Mock biometric scanning delay
-    setTimeout(() => {
-      setIsBiometricLoading(false);
-      navigation.replace(ROUTES.DASHBOARD);
-    }, 1200);
   };
 
   const renderDots = () => {
@@ -200,9 +144,7 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
           {errorMsg ? (
             <Text style={styles.errorText}>{errorMsg}</Text>
           ) : (
-            <Text style={styles.promptText}>
-              {isBiometricLoading ? 'Scanning fingerprint...' : 'Enter Admin PIN'}
-            </Text>
+            <Text style={styles.promptText}>Enter your 6-digit PIN</Text>
           )}
           {renderDots()}
         </View>
@@ -211,30 +153,21 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
         <View style={styles.keypadContainer}>
           {keypadKeys.map((row, rowIndex) => (
             <View key={rowIndex} style={styles.keypadRow}>
-              {row.map(key => {
-                const isSpecial = key === 'bio' || key === 'back';
+              {row.map((key, keyIdx) => {
+                if (key === '') {
+                  return <View key={keyIdx} style={[styles.keypadButton, {backgroundColor: 'transparent', borderColor: 'transparent'}]} />;
+                }
                 return (
                   <TouchableOpacity
                     key={key}
                     activeOpacity={0.6}
                     onPress={() => handleKeyPress(key)}
-                    disabled={isBiometricLoading}
                     style={[
                       styles.keypadButton,
-                      isSpecial ? styles.keypadButtonSpecial : null,
+                      key === 'back' ? styles.keypadButtonSpecial : null,
                     ]}
                   >
-                    {key === 'bio' ? (
-                      <Animated.View style={{transform: [{scale: bioScale}]}}>
-                        <FingerprintIcon
-                          color={
-                            isBiometricLoading
-                              ? theme.colors.meshBlue
-                              : theme.colors.accentCyan
-                          }
-                        />
-                      </Animated.View>
-                    ) : key === 'back' ? (
+                    {key === 'back' ? (
                       <BackspaceIcon />
                     ) : (
                       <Text style={styles.keypadButtonText}>{key}</Text>
@@ -249,7 +182,6 @@ const LoginScreen: React.FC<ScreenProps<'Login'>> = ({navigation}) => {
         {/* Offline Badge */}
         <View style={styles.footer}>
           <StatusBadge status="offline" />
-          <Text style={styles.footerHint}>Passcode: 123456 (demo)</Text>
         </View>
       </Animated.View>
     </GradientBackground>
@@ -369,11 +301,6 @@ const styles = StyleSheet.create({
   footer: {
     alignItems: 'center',
     gap: theme.spacing.sm,
-  },
-  footerHint: {
-    fontSize: 10,
-    color: theme.colors.textSecondary,
-    letterSpacing: 0.5,
   },
 });
 

@@ -9,12 +9,12 @@ import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 
 export type RootStackParamList = {
   Splash: undefined;
+  Home: undefined;
   Onboarding: undefined;
   Login: undefined;
   Dashboard: undefined;
   Enrollment: undefined;
   Verification: {
-    /** Optional pre-selected user ID for quick verification */
     userId?: string;
   };
   Settings: undefined;
@@ -28,6 +28,7 @@ export type ScreenProps<T extends keyof RootStackParamList> =
 /** Route name literals for programmatic navigation */
 export const ROUTES = {
   SPLASH: 'Splash',
+  HOME: 'Home',
   ONBOARDING: 'Onboarding',
   LOGIN: 'Login',
   DASHBOARD: 'Dashboard',

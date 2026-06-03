@@ -62,7 +62,7 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
 
     // Navigate after 2.5s
     const timer = setTimeout(() => {
-      navigation.replace(ROUTES.ONBOARDING);
+      navigation.replace(ROUTES.HOME);
     }, 2500);
 
     return () => clearTimeout(timer);

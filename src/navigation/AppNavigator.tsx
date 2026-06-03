@@ -1,16 +1,10 @@
-/**
- * AuthEdge — App Navigator
- *
- * Root stack navigator connecting all screens.
- * Dark-themed navigation with smooth transitions.
- */
-
 import React from 'react';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import type {RootStackParamList} from './types';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
+import HomeScreen from '../screens/HomeScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import LoginScreen from '../screens/LoginScreen';
 import DashboardScreen from '../screens/DashboardScreen';
@@ -35,6 +29,11 @@ const AppNavigator: React.FC = () => {
         name="Splash"
         component={SplashScreen}
         options={{animation: 'none'}}
+      />
+      <Stack.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{animation: 'fade'}}
       />
       <Stack.Screen
         name="Onboarding"
