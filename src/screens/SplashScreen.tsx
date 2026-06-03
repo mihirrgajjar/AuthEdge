@@ -1,9 +1,6 @@
 /**
  * AuthEdge — Splash Screen
- *
- * Launch screen displaying the AuthEdge logo with fade-in animation.
- * Checks onboarding status and navigates accordingly.
- * Full implementation comes in Phase 3.
+ * Centered logo with fade-in animation and progress bar.
  */
 
 import React, {useEffect, useRef} from 'react';
@@ -14,22 +11,24 @@ import {
   Animated,
   StatusBar,
   Text,
+  Dimensions,
 } from 'react-native';
+import Svg, {Defs, LinearGradient, Rect, Stop} from 'react-native-svg';
 import type {ScreenProps} from '../navigation/types';
 import {ROUTES} from '../navigation/types';
 import {theme} from '../theme';
-import {GradientBackground} from '../components/common';
 
 const AuthEdgeLogo = require('../assets/images/AuthEdge_logo.png');
+const {width, height} = Dimensions.get('window');
 
 const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.85)).current;
-  const taglineFade = useRef(new Animated.Value(0)).current;
+  const fadeAnim     = useRef(new Animated.Value(0)).current;
+  const scaleAnim    = useRef(new Animated.Value(0.88)).current;
+  const taglineFade  = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Logo fade-in + scale
+    // Logo fade + scale in
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -44,113 +43,135 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
       }),
     ]).start();
 
-    // Tagline fade-in after logo
+    // Tagline fades in after logo
     setTimeout(() => {
       Animated.timing(taglineFade, {
         toValue: 1,
         duration: 600,
         useNativeDriver: true,
       }).start();
-    }, 600);
+    }, 700);
 
-    // Progress bar animation
+    // Progress bar fills over 2.2s
     Animated.timing(progressAnim, {
       toValue: 1,
       duration: 2200,
       useNativeDriver: false,
     }).start();
 
-    // Navigate after 2.5s
+    // Navigate after 2.6s
     const timer = setTimeout(() => {
       navigation.replace(ROUTES.HOME);
-    }, 2500);
+    }, 2600);
 
     return () => clearTimeout(timer);
   }, [navigation, fadeAnim, scaleAnim, taglineFade, progressAnim]);
 
   const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
+    inputRange:  [0, 1],
     outputRange: ['0%', '100%'],
   });
 
   return (
-    <GradientBackground style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#000000" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#000000" translucent />
 
-      <View style={styles.content}>
+      {/* Full-screen gradient background — pure black to dark blue, no mid stops */}
+      <Svg style={StyleSheet.absoluteFillObject} width={width} height={height}>
+        <Defs>
+          <LinearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+            <Stop offset="0%"   stopColor="#000000" />
+            <Stop offset="100%" stopColor="#060B18" />
+          </LinearGradient>
+        </Defs>
+        <Rect width="100%" height="100%" fill="url(#bg)" />
+      </Svg>
+
+      {/* Centred content */}
+      <View style={styles.center}>
         <Animated.View
           style={[
-            styles.logoContainer,
-            {
-              opacity: fadeAnim,
-              transform: [{scale: scaleAnim}],
-            },
+            styles.logoWrap,
+            {opacity: fadeAnim, transform: [{scale: scaleAnim}]},
           ]}>
-          <Image source={AuthEdgeLogo} style={styles.logo} resizeMode="contain" />
+          <Image
+            source={AuthEdgeLogo}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </Animated.View>
 
-        <Animated.View style={[styles.taglineContainer, {opacity: taglineFade}]}>
+        <Animated.View style={[styles.taglineRow, {opacity: taglineFade}]}>
           <View style={styles.taglineLine} />
           <Text style={styles.taglineText}>VERIFY. SECURE. EMPOWER.</Text>
           <View style={styles.taglineLine} />
         </Animated.View>
       </View>
 
-      {/* Animated progress indicator */}
+      {/* Progress bar — pinned 60px from bottom */}
       <View style={styles.progressContainer}>
-        <Animated.View style={[styles.progressBar, {width: progressWidth}]} />
+        <View style={styles.progressTrack}>
+          <Animated.View style={[styles.progressFill, {width: progressWidth}]} />
+        </View>
       </View>
-    </GradientBackground>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#000000',
   },
-  content: {
+  center: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingBottom: 80, // shift slightly above true center for visual balance
   },
-  logoContainer: {
+  logoWrap: {
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 24,
   },
   logo: {
-    width: 220,
-    height: 220,
+    width: 200,
+    height: 200,
   },
-  taglineContainer: {
+  taglineRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: theme.spacing.sm,
-    gap: theme.spacing.md,
+    gap: 12,
   },
   taglineLine: {
-    width: 40,
+    width: 36,
     height: 1,
     backgroundColor: theme.colors.primaryBlue,
+    opacity: 0.7,
   },
   taglineText: {
-    fontSize: theme.typography.sizes.caption,
-    fontWeight: theme.typography.weights.semibold as any,
+    fontSize: 11,
+    fontWeight: '600',
     letterSpacing: 3,
     color: theme.colors.textAccent,
   },
   progressContainer: {
     position: 'absolute',
-    bottom: 80,
+    bottom: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  progressTrack: {
     width: 120,
     height: 2,
     backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.spacing.radius.xs,
+    borderRadius: 2,
     overflow: 'hidden',
   },
-  progressBar: {
+  progressFill: {
     height: '100%',
-    borderRadius: theme.spacing.radius.xs,
+    borderRadius: 2,
     backgroundColor: theme.colors.accentCyan,
   },
 });
