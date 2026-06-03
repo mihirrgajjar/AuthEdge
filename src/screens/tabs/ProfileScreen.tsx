@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.weights.heavy as any,
     color: theme.colors.textPrimary,
   },
-  content: {paddingHorizontal: theme.spacing.lg, paddingBottom: 30},
+  content: {paddingHorizontal: theme.spacing.lg, paddingBottom: 100},
 
   avatarCard: {marginBottom: theme.spacing.lg},
   avatarRow: {

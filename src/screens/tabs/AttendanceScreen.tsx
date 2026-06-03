@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
   },
   headerSub: {fontSize: 12, color: theme.colors.textSecondary, marginTop: 2},
 
-  idleContent: {paddingHorizontal: theme.spacing.lg, paddingBottom: 30},
+  idleContent: {paddingHorizontal: theme.spacing.lg, paddingBottom: 100},
   todayCard: {marginBottom: theme.spacing.md},
   todayTop: {flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: theme.spacing.md},
   todayLeft: {flex: 1},

@@ -4,7 +4,14 @@
  */
 
 import React from 'react';
-import {View, Text, TouchableOpacity, StyleSheet, Dimensions} from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  SafeAreaView,
+} from 'react-native';
 import Svg, {Path, Circle} from 'react-native-svg';
 import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import {theme} from '../theme';
@@ -50,18 +57,14 @@ const AttendanceIcon = ({active}: {active: boolean}) => (
 const HistoryIcon = ({active}: {active: boolean}) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
     <Path
-      d="M3 3h18v18H3V3z"
-      stroke="none" fill="none"
+      d="M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
+      stroke={active ? theme.colors.accentCyan : theme.colors.textSecondary}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     />
     <Path
       d="M8 2v4M16 2v4M3 10h18"
       stroke={active ? theme.colors.accentCyan : theme.colors.textSecondary}
       strokeWidth="2" strokeLinecap="round"
-    />
-    <Path
-      d="M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
-      stroke={active ? theme.colors.accentCyan : theme.colors.textSecondary}
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
     />
     <Path
       d="M9 14h1M13 14h1M9 17h1M13 17h1"
@@ -113,53 +116,65 @@ const TAB_ITEMS = [
 
 function CustomTabBar({state, navigation}: any) {
   return (
-    <View style={tabStyles.bar}>
-      {TAB_ITEMS.map((tab, index) => {
-        const active = state.index === index;
-        return (
-          <TouchableOpacity
-            key={tab.key}
-            style={tabStyles.tab}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate(tab.key)}>
-            <View style={[tabStyles.iconWrap, active && tabStyles.iconWrapActive]}>
-              <tab.Icon active={active} />
-            </View>
-            <Text style={[tabStyles.label, active && tabStyles.labelActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
+    // SafeAreaView handles the home indicator area on notch/gesture phones
+    <SafeAreaView style={tabStyles.safeArea}>
+      <View style={tabStyles.bar}>
+        {TAB_ITEMS.map((tab, index) => {
+          const active = state.index === index;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={tabStyles.tab}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate(tab.key)}>
+              <View style={[tabStyles.iconWrap, active && tabStyles.iconWrapActive]}>
+                <tab.Icon active={active} />
+              </View>
+              <Text
+                style={[tabStyles.label, active && tabStyles.labelActive]}
+                numberOfLines={1}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const tabStyles = StyleSheet.create({
-  bar: {
-    flexDirection: 'row',
+  safeArea: {
     backgroundColor: theme.colors.surfaceDark,
     borderTopWidth: 1,
     borderTopColor: theme.colors.surfaceBorder,
-    paddingBottom: 20,
+  },
+  bar: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surfaceDark,
     paddingTop: 8,
-    paddingHorizontal: 4,
+    paddingBottom: Platform.OS === 'android' ? 12 : 4,
+    paddingHorizontal: 0,
   },
   tab: {
     flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
     gap: 3,
   },
   iconWrap: {
-    width: 38, height: 32,
-    alignItems: 'center', justifyContent: 'center',
+    width: 40,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 10,
   },
   iconWrapActive: {
     backgroundColor: 'rgba(0,229,160,0.1)',
   },
   label: {
-    fontSize: 9,
+    fontSize: 10,
     color: theme.colors.textSecondary,
     fontWeight: '500',
     textAlign: 'center',
@@ -173,8 +188,9 @@ const tabStyles = StyleSheet.create({
 // ─── Navigator ────────────────────────────────────────────────────────────────
 const Tab = createBottomTabNavigator();
 
-// Wrap SettingsScreen so it doesn't need navigation.goBack()
-const SettingsTabScreen = () => <SettingsScreen navigation={{goBack: () => {}}} route={{} as any} />;
+const SettingsTabScreen = () => (
+  <SettingsScreen navigation={{goBack: () => {}}} route={{} as any} />
+);
 
 const MainTabNavigator: React.FC = () => {
   return (

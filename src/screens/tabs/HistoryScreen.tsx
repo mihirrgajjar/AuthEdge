@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   downloadText: {fontSize: 12, color: theme.colors.accentCyan, fontWeight: '700'},
 
-  content: {paddingHorizontal: theme.spacing.lg, paddingBottom: 30},
+  content: {paddingHorizontal: theme.spacing.lg, paddingBottom: 100},
 
   calendarCard: {marginBottom: theme.spacing.md, padding: theme.spacing.md},
 

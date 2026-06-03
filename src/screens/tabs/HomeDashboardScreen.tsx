@@ -16,6 +16,9 @@ import {
   Alert,
 } from 'react-native';
 import Svg, {Path, Circle} from 'react-native-svg';
+import {useNavigation} from '@react-navigation/native';
+import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {RootStackParamList} from '../../navigation/types';
 import {theme} from '../../theme';
 import {GradientBackground, Card, StatusBadge} from '../../components/common';
 
@@ -190,6 +193,8 @@ const barStyles = StyleSheet.create({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const HomeDashboardScreen: React.FC = () => {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
   // Attendance % capped at 100 — present / working days elapsed
   const attendancePct = WORKING_DAYS > 0
     ? Math.min(100, Math.round((PRESENT_DAYS / WORKING_DAYS) * 100))
@@ -198,7 +203,11 @@ const HomeDashboardScreen: React.FC = () => {
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       {text: 'Cancel', style: 'cancel'},
-      {text: 'Sign Out', style: 'destructive', onPress: () => {}},
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: () => navigation.replace('Home'),
+      },
     ]);
   };
 
@@ -405,7 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   scroll: {flex: 1},
-  scrollContent: {paddingHorizontal: theme.spacing.lg, paddingBottom: 30},
+  scrollContent: {paddingHorizontal: theme.spacing.lg, paddingBottom: 100},
 
   statusBanner: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
