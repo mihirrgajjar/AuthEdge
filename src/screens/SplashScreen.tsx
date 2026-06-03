@@ -3,7 +3,7 @@
  * Centered logo with fade-in animation and progress bar.
  */
 
-import React, {useEffect, useRef} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   View,
   Image,
@@ -30,7 +30,7 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   // Track dependencies so navigation can execute when loading completes and timer fires
-  const navTriggerRef = useRef(false);
+  const [isTimerFinished, setIsTimerFinished] = useState(false);
 
   useEffect(() => {
     // Logo fade + scale in
@@ -66,8 +66,7 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
 
     // Navigate after 2.6s
     const timer = setTimeout(() => {
-      navTriggerRef.current = true;
-      checkAndNavigate();
+      setIsTimerFinished(true);
     }, 2600);
 
     return () => clearTimeout(timer);
@@ -75,10 +74,10 @@ const SplashScreen: React.FC<ScreenProps<'Splash'>> = ({navigation}) => {
 
   // Navigate when loading finishes if the timer has fired
   useEffect(() => {
-    if (!isLoading && navTriggerRef.current) {
+    if (!isLoading && isTimerFinished) {
       checkAndNavigate();
     }
-  }, [isLoading, isLoggedIn, isRegistered]);
+  }, [isLoading, isLoggedIn, isRegistered, isTimerFinished]);
 
   const checkAndNavigate = () => {
     if (isLoading) return; // Wait for database to load
